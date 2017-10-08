@@ -18,6 +18,11 @@ CRGB leds[LED_COUNT];
  * ISR should called every second
  */
 ISR(TIMER1_COMPA_vect) {
+  timer_count++;
+
+  fill_rainbow(leds, LED_COUNT, hue++, 5);
+  FastLED.show();
+
   if (timer_count > 2000) {
     noInterrupts();
     leds_clear();
@@ -26,10 +31,6 @@ ISR(TIMER1_COMPA_vect) {
     timer_active = 0;
     interrupts();
   }
-  timer_count++;
-
-  fill_rainbow(leds, LED_COUNT, hue++, 5);
-  FastLED.show();
 }
 
 void setup_timer1() {
