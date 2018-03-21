@@ -7,10 +7,12 @@
 #include "config.h"
 
 RFM69 radio;
-uint8_t led_brightness = 80;
+uint8_t led_brightness = 60;
 volatile short timer_active = 0;
 volatile unsigned short timer_count = 0;
 volatile uint8_t hue = 0;
+volatile boolean light_control = true;
+volatile unsigned short door_status = 100;
 CRGB leds[LED_COUNT];
 
 
@@ -23,7 +25,7 @@ ISR(TIMER1_COMPA_vect) {
   fill_rainbow(leds, LED_COUNT, hue++, 5);
   FastLED.show();
 
-  if (timer_count > 2000) {
+  if (timer_count > 1500) {
     noInterrupts();
     leds_clear();
     TCCR1A = 0;
@@ -62,6 +64,8 @@ void leds_clear() {
 void setup() {
   pinMode(RELAY_PIN, OUTPUT);
   digitalWrite(RELAY_PIN, LOW);
+
+  pinMode(REED_SWITCH, INPUT);
   power_twi_disable();
   power_adc_disable();
 
@@ -79,6 +83,18 @@ void setup() {
 
   radio.initialize(FREQUENCY, NODEID, NETWORKID);
   radio.encrypt(ENCRYPTKEY);
+}
+
+void send_door_status(uint8_t door_status) {
+  char buffer[30] = "";
+  if (door_status == 1) {
+    sprintf(buffer, "%d;DoorStatus;OPEN", NODEID);
+  }
+  else {
+    sprintf(buffer, "%d;DoorStatus;CLOSED", NODEID);
+  }
+  Serial.println(buffer);
+  radio.sendWithRetry(GATEWAYID, buffer, strlen(buffer), 2);
 }
 
 void loop() {
@@ -108,8 +124,39 @@ void loop() {
       fill_rainbow(leds, LED_COUNT, hue++, 5);
       FastLED.show();
     }
+
+    if (command.equals("O_D_OP")) {
+      digitalWrite(RELAY_PIN, HIGH);
+      delay(1000);
+      digitalWrite(RELAY_PIN, LOW);
+    }
+
+    if (command.equals("D_LIGHT")) {
+      light_control = false;
+      if (DEBUG == 1) {
+        Serial.println("Light off");
+      }
+    }
+    
+    if (command.equals("E_LIGHT")) {
+      light_control = true;
+      Serial.println("Light on");
+    }
   }
-  if (timer_active == 0) {
-    LowPower.powerDown(SLEEP_FOREVER, ADC_ON, BOD_OFF);
+  if (digitalRead(REED_SWITCH) == LOW && light_control == true && timer_active != 1) {
+    Serial.println("Door OPEN but timer was not active");
+    setup_timer1();
+    fill_rainbow(leds, LED_COUNT, hue++, 5);
+    FastLED.show();
+  }
+  if (digitalRead(REED_SWITCH) == HIGH) {
+      if (door_status != 0) {
+      send_door_status(0);
+    }
+    door_status = 0;
+  }
+  if (digitalRead(REED_SWITCH) == LOW && door_status != 1) {
+    send_door_status(1);
+    door_status = 1;
   }
 }
