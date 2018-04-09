@@ -13,6 +13,7 @@ volatile unsigned short timer_count = 0;
 volatile uint8_t hue = 0;
 volatile boolean light_control = true;
 volatile unsigned short door_status = 100;
+volatile short led_display = 1;
 CRGB leds[LED_COUNT];
 
 
@@ -23,7 +24,7 @@ ISR(TIMER1_COMPA_vect) {
   timer_count++;
 
   fill_rainbow(leds, LED_COUNT, hue++, 5);
-  FastLED.show();
+  led_display = 2;
 
   if (timer_count > 1500) {
     noInterrupts();
@@ -158,5 +159,9 @@ void loop() {
   if (digitalRead(REED_SWITCH) == LOW && door_status != 1) {
     send_door_status(1);
     door_status = 1;
+  }
+  if (led_display == 2) {
+    FastLED.show();
+    led_display = 0;
   }
 }
