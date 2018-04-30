@@ -3,11 +3,13 @@
 #include <FastLED.h>
 #include <RFM69.h>
 #include <LowPower.h>
+#include <Bounce2.h>
+
 
 #include "config.h"
 
 RFM69 radio;
-uint8_t led_brightness = 60;
+uint8_t led_brightness = 40;
 volatile short timer_active = 0;
 volatile unsigned short timer_count = 0;
 volatile uint8_t hue = 0;
@@ -15,6 +17,7 @@ volatile boolean light_control = true;
 volatile unsigned short door_status = 100;
 volatile short led_display = 1;
 CRGB leds[LED_COUNT];
+Bounce debouncer = Bounce();
 
 
 /*
@@ -63,8 +66,10 @@ void leds_clear() {
 }
 
 void setup() {
-  pinMode(RELAY_PIN, OUTPUT);
-  digitalWrite(RELAY_PIN, LOW);
+  pinMode(ALL_LIGHTS_OFF_BUTTON, INPUT_PULLUP);
+  debouncer.attach(ALL_LIGHTS_OFF_BUTTON);
+  debouncer.interval(50);
+
 
   pinMode(REED_SWITCH, INPUT);
   power_twi_disable();
@@ -99,6 +104,13 @@ void send_door_status(uint8_t door_status) {
 }
 
 void loop() {
+  debouncer.update();
+  if ( debouncer.fell() == true ) {
+    char button_all_light_off[30] = "";
+    sprintf(button_all_light_off, "%d;A_LIGHT_OFF", NODEID);
+    radio.sendWithRetry(GATEWAYID, button_all_light_off, strlen(button_all_light_off), 2);
+    Serial.println(button_all_light_off);
+  }
   if (radio.receiveDone()) {
     String data;
 
@@ -124,12 +136,6 @@ void loop() {
       setup_timer1();
       fill_rainbow(leds, LED_COUNT, hue++, 5);
       FastLED.show();
-    }
-
-    if (command.equals("O_D_OP")) {
-      digitalWrite(RELAY_PIN, HIGH);
-      delay(1000);
-      digitalWrite(RELAY_PIN, LOW);
     }
 
     if (command.equals("D_LIGHT")) {
