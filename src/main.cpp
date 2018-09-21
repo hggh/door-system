@@ -1,3 +1,4 @@
+#include <Arduino.h>
 #include <avr/power.h>
 
 #include <FastLED.h>
@@ -18,6 +19,8 @@ volatile unsigned short door_status = 100;
 volatile short led_display = 1;
 CRGB leds[LED_COUNT];
 Bounce debouncer = Bounce();
+
+void leds_clear();
 
 
 /*
@@ -72,6 +75,8 @@ void setup() {
 
 
   pinMode(REED_SWITCH, INPUT);
+
+  ADCSRA &= ~(1 << 7);
   power_twi_disable();
   power_adc_disable();
 
@@ -121,7 +126,6 @@ void loop() {
     String command = data.substring(0, index);
 
     if (radio.ACKRequested()) {
-      byte theNodeID = radio.SENDERID;
       radio.sendACK();
     }
 

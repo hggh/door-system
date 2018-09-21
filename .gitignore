@@ -1,1 +1,4 @@
-door/config.h
+src/config.h
+.pioenvs
+.piolibdeps
+*.swp
