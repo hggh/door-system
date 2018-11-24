@@ -10,7 +10,7 @@
 #include "config.h"
 
 RFM69 radio;
-uint8_t led_brightness = 40;
+uint8_t led_brightness = 100;
 volatile short timer_active = 0;
 volatile unsigned short timer_count = 0;
 volatile uint8_t hue = 0;
