@@ -1,7 +1,7 @@
 union() {
 	difference() {
 		cube([50, 50, 3], center=true);
-		cylinder(r=10, h=4, $fn=60, center=true);
+		cylinder(r=12, h=4, $fn=60, center=true);
 
 		// bohrungen
 		translate([31/2, 31/2, 0]) {
