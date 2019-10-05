@@ -171,7 +171,7 @@ void setup() {
 
   pinMode(BUTTON_SWITCH_PIN, INPUT_PULLUP);
   all_off_switch.attach(BUTTON_SWITCH_PIN);
-  all_off_switch.interval(250);
+  all_off_switch.interval(10);
 
   FastLED.addLeds<WS2812, OUTDOOR_LED_PIN>(outdoor_leds, OUTDOOR_LED_COUNT);
   FastLED.addLeds<WS2812, INDOOR_LED_PIN>(indoor_leds, INDOOR_LED_COUNT);
@@ -204,7 +204,7 @@ void loop() {
   short current_door_status = door.read();
 
   if (all_off_switch.fell()) {
-    client.publish("all_off_switch/state", "1");
+    client.publish("/all_off_switch/state", "1");
   }
 
   // door is opened and door was closed before
