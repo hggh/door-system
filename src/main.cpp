@@ -19,7 +19,7 @@ extern "C" {
 #define LED_OPENHAB 3
 
 #define OUTDOOR_LED_COUNT 52
-#define INDOOR_LED_COUNT 52
+#define INDOOR_LED_COUNT 57
 
 #define LED_MODE_NOTHING 0
 #define LED_MODE_RAINBOW 1
@@ -50,28 +50,17 @@ Bounce all_off_switch = Bounce();
 
 os_timer_t Timer1;
 
+void led_show() {
+  FastLED[0].showLeds(outdoor_led_brightness);
+  FastLED[1].showLeds(indoor_led_brightness);
+}
+
 void outdoor_led_clear() {
-  for (int i = 0; i <= OUTDOOR_LED_COUNT; i++) {
-    outdoor_leds[i] = CRGB(0,0,0);
-  }
+  fill_solid(outdoor_leds, OUTDOOR_LED_COUNT, CRGB::Black);
 }
 
 void indoor_led_clear() {
-  for (int i = 0; i <= INDOOR_LED_COUNT; i++) {
-    indoor_leds[i] = CRGB(0,0,0);
-  }
-}
-
-void indoor_led_set_brightness(uint8_t brightness) {
-  for (int i = 0; i <= INDOOR_LED_COUNT; i++) {
-    indoor_leds[i].nscale8(brightness);
-  }
-}
-
-void outdoor_led_set_brightness(uint8_t brightness) {
-  for (int i = 0; i <= OUTDOOR_LED_COUNT; i++) {
-    outdoor_leds[i].nscale8(brightness);
-  }
+  fill_solid(indoor_leds, INDOOR_LED_COUNT, CRGB::Black);
 }
 
 void mqtt_callback(char* topic, byte* payload, unsigned int len) {
@@ -98,7 +87,7 @@ void mqtt_callback(char* topic, byte* payload, unsigned int len) {
   int value_bright = messageString.substring(index_blue + 1, index_bright).toInt();
   int value_rain = messageString.substring(index_bright + 1).toInt();
 
-  value_bright = map(value_bright, 0, 100, 0, 255);
+  indoor_led_brightness = map(value_bright, 0, 100, 0, 255);
 
   if (value_state == 0) {
     indoor_led_status = LED_OFF;
@@ -113,12 +102,10 @@ void mqtt_callback(char* topic, byte* payload, unsigned int len) {
   else {
     CRGB color = CRGB(value_red, value_green, value_blue);
     indoor_led_mode = LED_MODE_SIMPLE_COLOR;
-    for (int i = 0; i <= INDOOR_LED_COUNT; i++) {
-      indoor_leds[i] = color;
-    }
+    fill_solid(indoor_leds, INDOOR_LED_COUNT, color);
   }
+  led_show();
 
-  indoor_led_set_brightness(value_bright);
   indoor_led_status = LED_OPENHAB;
   led_update = 1;
 }
@@ -159,6 +146,7 @@ void setup_timer1(void) {
 
 void wificonnect() {
   WiFi.mode(WIFI_STA);
+  WiFi.setSleepMode(WIFI_NONE_SLEEP);
   WiFi.begin(SECRET_SSID, SECRET_PASS);
   while (WiFi.status() != WL_CONNECTED) {
     delay(200);
@@ -185,9 +173,8 @@ void setup() {
   all_off_switch.attach(BUTTON_SWITCH_PIN);
   all_off_switch.interval(250);
 
-  FastLED.addLeds<NEOPIXEL, OUTDOOR_LED_PIN>(outdoor_leds, OUTDOOR_LED_COUNT);
-  FastLED.addLeds<NEOPIXEL, INDOOR_LED_PIN>(indoor_leds, INDOOR_LED_COUNT);
-  FastLED.setBrightness(outdoor_led_brightness);
+  FastLED.addLeds<WS2812, OUTDOOR_LED_PIN>(outdoor_leds, OUTDOOR_LED_COUNT);
+  FastLED.addLeds<WS2812, INDOOR_LED_PIN>(indoor_leds, INDOOR_LED_COUNT);
 
   client.setServer(MQTT_SERVER, 1883);
   client.setCallback(mqtt_callback);
@@ -195,14 +182,15 @@ void setup() {
   wificonnect();
 
   outdoor_led_clear();
-  FastLED.show();
+  indoor_led_clear();
+  led_show();
 
   setup_timer1();
 }
 
 void loop() {
   if (led_update == 1) {
-    FastLED.show();
+    led_show();
     led_update = 0;
   }
   if (WiFi.status() != WL_CONNECTED) {
@@ -224,7 +212,7 @@ void loop() {
     // enable LEDs first
     if (outdoor_led_status == LED_OFF) {
       fill_rainbow(outdoor_leds, OUTDOOR_LED_COUNT, outdoor_hue++, 5);
-      FastLED.show();
+      led_show();
       outdoor_led_status = LED_ON;
       // after close of door leave LEDs 5s on
       outdoor_timer_active = 250;
@@ -233,10 +221,9 @@ void loop() {
     // if indoor LEDs already ON, do nothing
     if (indoor_led_status != LED_OPENHAB) {
       fill_rainbow(indoor_leds, INDOOR_LED_COUNT, indoor_hue++, 5);
-      indoor_led_set_brightness(40);
-      FastLED.show();
+      led_show();
       indoor_led_status = LED_ON;
-      indoor_timer_active = 250;
+      indoor_timer_active = 1000;
     }
   
     // send status to OpenHAB2
@@ -253,7 +240,7 @@ void loop() {
     // after close of door leave LEDs 5s on
     outdoor_timer_active = 250;
     if (indoor_led_status != LED_OPENHAB) {
-      indoor_timer_active = 250;
+      indoor_timer_active = 1000;
     }
   }
 }
