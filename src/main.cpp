@@ -173,8 +173,8 @@ void setup() {
   all_off_switch.attach(BUTTON_SWITCH_PIN);
   all_off_switch.interval(10);
 
-  FastLED.addLeds<WS2812, OUTDOOR_LED_PIN>(outdoor_leds, OUTDOOR_LED_COUNT);
-  FastLED.addLeds<WS2812, INDOOR_LED_PIN>(indoor_leds, INDOOR_LED_COUNT);
+  FastLED.addLeds<NEOPIXEL, OUTDOOR_LED_PIN>(outdoor_leds, OUTDOOR_LED_COUNT);
+  FastLED.addLeds<NEOPIXEL, INDOOR_LED_PIN>(indoor_leds, INDOOR_LED_COUNT);
 
   client.setServer(MQTT_SERVER, 1883);
   client.setCallback(mqtt_callback);
@@ -186,6 +186,15 @@ void setup() {
   led_show();
 
   setup_timer1();
+  ArduinoOTA.setPassword(OTA_PASS);
+  ArduinoOTA.begin();
+}
+
+void mqtt_check_connection() {
+  if (!client.connected()) {
+    client.connect("door", MQTT_USERNAME, MQTT_PASSWORD);
+    client.subscribe("indoor_led/state");
+  }
 }
 
 void loop() {
@@ -196,6 +205,7 @@ void loop() {
   if (WiFi.status() != WL_CONNECTED) {
     wificonnect();
   }
+  mqtt_check_connection();
   ArduinoOTA.handle();
   door.update();
   all_off_switch.update();
