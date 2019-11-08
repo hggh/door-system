@@ -165,6 +165,7 @@ void send_door_status(uint8_t door_status) {
 }
 
 void setup() {
+  WiFi.hostname("door-system");
   pinMode(DOOR_REED_CONTACT_PIN, INPUT_PULLUP);
   door.attach(DOOR_REED_CONTACT_PIN);
   door.interval(250);
