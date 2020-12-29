@@ -1,0 +1,4 @@
+(sym_lib_table
+  (lib (name tle)(type Legacy)(uri /home/jonas/entwicklung/kicad-libraries/tle4913.lib)(options "")(descr ""))
+  (lib (name PL9823)(type Legacy)(uri /home/jonas/entwicklung/kicad-libraries/PL9823.lib)(options "")(descr ""))
+)
