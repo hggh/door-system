@@ -1,18 +1,21 @@
 #include <Arduino.h>
-#include <ESP8266WiFi.h>
+#include <WiFi.h>
 #include <ArduinoOTA.h>
 
-#define FASTLED_ESP8266_RAW_PIN_ORDER
-#define FASTLED_ALLOW_INTERRUPTS 0
 #include <FastLED.h>
 #include <PubSubClient.h>
 #include <Bounce2.h>
 
 #include "config.h"
 
-extern "C" {
-#include "user_interface.h"
-}
+#define PIN_LED_OUTDOOR 16
+#define PIN_LED_INDOOR 17
+#define PIN_ENABLE_LEDS_BUTTONS 18  // LED in the big push buttons?
+#define PIN_DOOR_REED_CONTACT 34 // external pullup  
+#define PIN_BUTTON_ALL_LIGHTS_OFF 35 // external pullup
+#define PIN_BUTTON_SWITCH_LIGHT_ON 36 // external pullup
+#define PIN_DOOR_SEALED 39 // external pullup // TLE4913 inside lock
+#define PIN_BUZZER 1 // FIXME: Buzzer meldet wenn tür abgeschlossen wird
 
 #define LED_ON 1
 #define LED_OFF 2
@@ -46,9 +49,10 @@ volatile unsigned short led_update = 0;
 WiFiClient espClient;
 PubSubClient client(espClient);
 Bounce door = Bounce();
-Bounce all_off_switch = Bounce();
-
-os_timer_t Timer1;
+Bounce button_all_lights_off = Bounce();
+Bounce button_switch_light_on = Bounce();
+Bounce door_sealed = Bounce();
+hw_timer_t * timer1 = NULL;
 
 void led_show() {
   FastLED[0].showLeds(outdoor_led_brightness);
@@ -110,7 +114,7 @@ void mqtt_callback(char* topic, byte* payload, unsigned int len) {
   led_update = 1;
 }
 
-void timerCall(void*z) {
+void IRAM_ATTR timerCall() {
   if (outdoor_led_status == LED_ON) {
     if (outdoor_timer_active == 0) {
       outdoor_led_clear();
@@ -140,18 +144,18 @@ void timerCall(void*z) {
 }
 
 void setup_timer1(void) {
-  os_timer_setfn(&Timer1, timerCall, NULL);
-  os_timer_arm(&Timer1, 20, true);
+  timer1 = timerBegin(0, 80, true);
+  timerAttachInterrupt(timer1, &timerCall, true);
+  timerAlarmWrite(timer1, 20 * 1000, true);
 }
 
 void wificonnect() {
   WiFi.mode(WIFI_STA);
-  WiFi.setSleepMode(WIFI_NONE_SLEEP);
   WiFi.begin(SECRET_SSID, SECRET_PASS);
   while (WiFi.status() != WL_CONNECTED) {
     delay(200);
   }
-  client.connect("door", MQTT_USERNAME, MQTT_PASSWORD);
+  client.connect("door-esp32", MQTT_USERNAME, MQTT_PASSWORD);
   client.subscribe("indoor_led/state");
 }
 
@@ -165,17 +169,36 @@ void send_door_status(uint8_t door_status) {
 }
 
 void setup() {
-  WiFi.hostname("door-system");
-  pinMode(DOOR_REED_CONTACT_PIN, INPUT_PULLUP);
-  door.attach(DOOR_REED_CONTACT_PIN);
+  Serial.begin(115200);
+  setCpuFrequencyMhz(80);
+  WiFi.setHostname("door-system");
+
+  // reed contact above the door
+  pinMode(PIN_DOOR_REED_CONTACT, INPUT);
+  door.attach(PIN_DOOR_REED_CONTACT);
   door.interval(250);
 
-  pinMode(BUTTON_SWITCH_PIN, INPUT_PULLUP);
-  all_off_switch.attach(BUTTON_SWITCH_PIN);
-  all_off_switch.interval(10);
+  // push button
+  pinMode(PIN_BUTTON_ALL_LIGHTS_OFF, INPUT);
+  button_all_lights_off.attach(PIN_BUTTON_ALL_LIGHTS_OFF);
+  button_all_lights_off.interval(10);
 
-  FastLED.addLeds<NEOPIXEL, OUTDOOR_LED_PIN>(outdoor_leds, OUTDOOR_LED_COUNT);
-  FastLED.addLeds<NEOPIXEL, INDOOR_LED_PIN>(indoor_leds, INDOOR_LED_COUNT);
+  // push button
+  pinMode(PIN_BUTTON_SWITCH_LIGHT_ON, INPUT);
+  button_switch_light_on.attach(PIN_BUTTON_SWITCH_LIGHT_ON);
+  button_switch_light_on.interval(10);
+
+  // TLE4913 hall sensor with open drain
+  pinMode(PIN_DOOR_SEALED, INPUT);
+  door_sealed.attach(PIN_DOOR_SEALED);
+  door_sealed.interval(100);
+
+  // push buttons has leds
+  pinMode(PIN_ENABLE_LEDS_BUTTONS, OUTPUT);
+  digitalWrite(PIN_ENABLE_LEDS_BUTTONS, LOW);
+
+  FastLED.addLeds<NEOPIXEL, PIN_LED_OUTDOOR>(outdoor_leds, OUTDOOR_LED_COUNT);
+  FastLED.addLeds<NEOPIXEL, PIN_LED_INDOOR>(indoor_leds, INDOOR_LED_COUNT);
 
   client.setServer(MQTT_SERVER, 1883);
   client.setCallback(mqtt_callback);
@@ -193,7 +216,7 @@ void setup() {
 
 void mqtt_check_connection() {
   if (!client.connected()) {
-    client.connect("door", MQTT_USERNAME, MQTT_PASSWORD);
+    client.connect("door-esp32", MQTT_USERNAME, MQTT_PASSWORD);
     client.subscribe("indoor_led/state");
   }
 }
@@ -208,14 +231,20 @@ void loop() {
   }
   mqtt_check_connection();
   ArduinoOTA.handle();
+
+  // Bounce2 updates
   door.update();
-  all_off_switch.update();
+  button_all_lights_off.update();
+  button_switch_light_on.update();
+  door_sealed.update();
+
   client.loop();
 
   short current_door_status = door.read();
 
-  if (all_off_switch.fell()) {
-    client.publish("/all_off_switch/state", "1");
+  if (button_all_lights_off.fell()) {
+    //client.publish("/all_off_switch/state", "1");
+Serial.println("Pressed");
   }
 
   // door is opened and door was closed before
