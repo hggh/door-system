@@ -15,7 +15,7 @@
 #define PIN_BUTTON_ALL_LIGHTS_OFF 35 // external pullup
 #define PIN_BUTTON_SWITCH_LIGHT_ON 36 // external pullup
 #define PIN_DOOR_SEALED 39 // external pullup // TLE4913 inside lock
-#define PIN_BUZZER 1 // FIXME: Buzzer meldet wenn tür abgeschlossen wird
+#define PIN_BUZZER 5 // FIXME: Buzzer meldet wenn tür abgeschlossen wird
 
 #define LED_ON 1
 #define LED_OFF 2
